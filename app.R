@@ -3,6 +3,8 @@ library(dplyr)
 library(readr)
 library(stringr)
 library(sf)
+library(leaflet)
+library(ggplot2)
 
 city_bounds <- list(
   
@@ -87,7 +89,7 @@ cleaned_data <- initial_data %>%
   
   #Feature engineering
   mutate(
-    Signal_Strength_Score = cut(RXLEV_dBm,
+    Signal_Strength_Score = cut(RXLEV_dBm,                  #creates a categorical variable from a numeric value
                                 breaks = c(-Inf, -100, -90, -80, -70, -50, Inf),
                                 labels = c("1 (Poor)", "2 (Fair)", "3 (Good)", "4 (Very Good)", "5 (Excellent)", "1 (Poor)"),
                                 right = FALSE,                #Right interval excluded
@@ -109,14 +111,107 @@ final_data_ready <- cleaned_data %>%
   )
 
 ui <- fluidPage(
+  titlePanel("AuraNet: Network Performance Dashboard"),
   
-  titlePanel("AuraNet"),
-  
+  sidebarLayout(
+    sidebarPanel(
+      width = 3,
+      h4("Data Filtering & Analysis"),
+      
+      selectInput("city_filter", "Select City:",
+                  choices = sort(unique(final_data_ready$City)),
+                  selected = "Bengaluru",
+                  multiple = FALSE),
+ 
+      selectInput("carrier_filter", "Select Carrier:",
+                  choices = c("All", sort(unique(as.character(final_data_ready$Carrier)))), 
+                  selected = "All",
+                  multiple = TRUE),
+
+      selectInput("band_filter", "Filter by Technology Band:",
+                  choices = sort(unique(final_data_ready$BAND_MHz)),
+                  selected = unique(final_data_ready$BAND_MHz),
+                  multiple = TRUE),
+
+      selectInput("quality_filter", "Minimum Signal Strength:",
+                  choices = levels(final_data_ready$Signal_Strength_Score),
+                  selected = "3 (Good)",
+                  multiple = FALSE),
+      
+      hr(),
+      h5(strong("Statistical Model")),
+      p("The Linear Regression model is applied based on the current filters."),
+      p(em("Explore model coefficients in the 'Model Explorer' tab."))
+    ),
+
+    mainPanel(
+      width = 9,
+      # Tabset Panel for multiple views
+      tabsetPanel(
+        id = "main_tabs",
+        
+        # TAB 1: Geospatial Heatmap (Hexbin Concept Simulation)
+        tabPanel("Geospatial Heatmap", icon = icon("map-marker-alt"),
+                 h4("Cellular Signal Strength (RXLEV) by Location"),
+                 p("The map simulates Hexagonal Binning by aggregating mean signal strength within the filtered area."),
+                 leafletOutput("cityMap", height = "75vh")
+        ),
+        
+        # TAB 2: Performance Insights (Charts)
+        tabPanel("Performance Insights", icon = icon("chart-bar"),
+                 fluidRow(
+                   column(12, h4("Performance Comparison by Carrier and Quality")),
+                   column(6, 
+                          h5(strong("Chart 1: Avg. Download Speed (kbps) by Carrier")),
+                          plotOutput("dl_speed_bar", height = "300px")
+                   ),
+                   column(6, 
+                          h5(strong("Chart 2: Signal Quality (SNR) Distribution")),
+                          plotOutput("snr_box", height = "300px")
+                   )
+                 ),
+                 fluidRow(
+                   column(12, 
+                          h5(strong("Chart 3: Signal Strength vs. Download Speed")),
+                          plotOutput("dl_vs_rxlev_scatter", height = "350px")
+                   )
+                 )
+        ),
+        
+        # TAB 3: Model Explorer (Linear Regression Output)
+        tabPanel("Model Explorer", icon = icon("flask"),
+                 h4("Linear Regression Model Summary: DL Speed Drivers"),
+                 p(strong("Dependent Variable:"), " DL Speed (kbps)"),
+                 p(strong("Predictors:"), " RXLEV (dBm), SNR (dB), Population Density, and BAND (MHz)"),
+                 verbatimTextOutput("modelSummary")
+        )
+      )
+    )
+  )
 )
 
-server <- function(input, output) {
+# 2. Server Definition
+server <- function(input, output, session) {
   
+  #Reactive filtering
   
+  filtered_data <- reactive({
+    data <- final_data_ready %>%
+      filter(City == input$city_filter) 
+
+    selected_carriers <- input$carrier_filter
+    if (!"All" %in% selected_carriers) {
+      data <- data %>% filter(Carrier %in% selected_carriers)
+    }
+
+    data <- data %>% filter(BAND_MHz %in% input$band_filter)
+
+    min_level <- which(levels(final_data_ready$Signal_Strength_Score) == input$quality_filter)
+    data %>%
+      filter(as.integer(Signal_Strength_Score) >= min_level)
+  })
+
 }
- 
+
+# 3. Run the App
 shinyApp(ui = ui, server = server)
