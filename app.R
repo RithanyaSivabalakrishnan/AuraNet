@@ -72,7 +72,7 @@ cleaned_data <- initial_data %>%
 
 # --- Step 3c: Population Join ---
 
-tif_files <- list.files(path = "C:\\Users\\Ritha\\OneDrive\\Desktop\\SignalScape\\population_ind_pak_general", pattern = "^population_.*_general.*\\.tif$", full.names = TRUE)
+tif_files <- list.files(path = "C:\\01_Rithanya\\06_College\\SEM_3\\R\\Package\\SignalScape\\population_ind_pak_general", pattern = "^population_.*_general.*\\.tif$", full.names = TRUE)
 if (length(tif_files) == 0) {
   stop("No .tif files found. Check the file path.")
 }
@@ -237,11 +237,11 @@ server <- function(input, output, session) {
   })
   
   # --- TAB 1: Map Logic ---
-  output$cityMap <- renderLeaflet({
-    leaflet() %>%
-      addProviderTiles(providers$CartoDB.Positron) %>%
-      setView(lng = 78.96, lat = 20.59, zoom = 4)
-  })
+output$cityMap <- renderLeaflet({
+  leaflet() %>%
+    addTiles() %>% # 100% free standard map layout
+    setView(lng = 78.96, lat = 20.59, zoom = 4)
+})
   
   observe({
     data_for_map <- filtered_data()
